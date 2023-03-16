@@ -15,7 +15,7 @@ func New() *Engine {
 }
 
 func (e *Engine) addRouter(method, path string, handler HandlerFunc) {
-	e.routers.addRoutes(method, path, handler)
+	e.routers.addRoute(method, path, handler)
 }
 
 func (e *Engine) GET(path string, handler HandlerFunc) {

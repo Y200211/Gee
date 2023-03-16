@@ -14,6 +14,7 @@ type Context struct {
 	Method     string
 	Path       string
 	StatusCode int
+	Params     map[string]string
 }
 
 func newContext(w http.ResponseWriter, req *http.Request) *Context {
@@ -51,12 +52,12 @@ func (c *Context) String(code int, format string, value ...interface{}) {
 func (c *Context) JSON(code int, obj interface{}) {
 	c.SetHeader("Content-Type", "application/json")
 	c.Status(code)
-	
 	encoder := json.NewEncoder(c.Writer)
 	if err := encoder.Encode(obj); err != nil {
 		http.Error(c.Writer, err.Error(), 500)
 	}
 }
+
 func (c *Context) Data(code int, data []byte) {
 	c.Status(code)
 	c.Writer.Write(data)
@@ -66,4 +67,9 @@ func (c *Context) HTML(code int, html string) {
 	c.Status(code)
 	c.SetHeader("Content-Type", "text/html")
 	c.Writer.Write([]byte(html))
+}
+
+func (c *Context) Param(key string) string {
+	value, _ := c.Params[key]
+	return value
 }
