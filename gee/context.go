@@ -15,6 +15,9 @@ type Context struct {
 	Path       string
 	StatusCode int
 	Params     map[string]string
+	handlers   []HandlerFunc
+	index      int
+	engine     *Engine
 }
 
 func newContext(w http.ResponseWriter, req *http.Request) *Context {
@@ -23,6 +26,15 @@ func newContext(w http.ResponseWriter, req *http.Request) *Context {
 		Req:    req,
 		Method: req.Method,
 		Path:   req.URL.Path,
+		index:  -1,
+	}
+}
+
+func (c *Context) Next() {
+	c.index++
+	v := len(c.handlers)
+	for ; c.index < v; c.index++ {
+		c.handlers[c.index](c)
 	}
 }
 
@@ -63,13 +75,25 @@ func (c *Context) Data(code int, data []byte) {
 	c.Writer.Write(data)
 }
 
-func (c *Context) HTML(code int, html string) {
-	c.Status(code)
+//	func (c *Context) HTML(code int, html string) {
+//		//c.Status(code)
+//		//c.SetHeader("Content-Type", "text/html")
+//		//c.Writer.Write([]byte(html))
+//
+// }
+func (c *Context) HTML(code int, name string, data interface{}) {
 	c.SetHeader("Content-Type", "text/html")
-	c.Writer.Write([]byte(html))
+	c.Status(code)
+	if err := c.engine.htmlTemplates.ExecuteTemplate(c.Writer, name, data); err != nil {
+		c.Fail(500, err.Error())
+	}
 }
-
 func (c *Context) Param(key string) string {
 	value, _ := c.Params[key]
 	return value
+}
+
+func (c *Context) Fail(code int, err string) {
+	c.index = len(c.handlers)
+	c.JSON(code, H{"message": err})
 }

@@ -18,19 +18,26 @@ func newRouter() *router {
 
 func (r *router) handler(c *Context) {
 	n, params := r.getRoute(c.Method, c.Path)
+
 	if n != nil {
-		c.Params = params
 		key := c.Method + "-" + n.pattern
-		r.handlers[key](c)
+		c.Params = params
+		c.handlers = append(c.handlers, r.handlers[key])
 	} else {
-		c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
+		c.handlers = append(c.handlers, func(c *Context) {
+			c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
+		})
 	}
-	//key := c.Method + "-" + c.Path
-	//if handler, ok := r.handlers[key]; ok {
-	//	handler(c)
+	c.Next()
+	//n, params := r.getRoute(c.Method, c.Path)
+	//if n != nil {
+	//	c.Params = params
+	//	key := c.Method + "-" + n.pattern
+	//	r.handlers[key](c)
 	//} else {
 	//	c.String(http.StatusNotFound, "404 NOT FOUND: %s\n", c.Path)
 	//}
+
 }
 
 func parsePattern(pattern string) []string {

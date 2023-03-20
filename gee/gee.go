@@ -1,16 +1,21 @@
 package gee
 
 import (
+	"html/template"
 	"log"
 	"net/http"
+	"path"
+	"strings"
 )
 
 type HandlerFunc func(c *Context)
 
 type Engine struct {
 	*RouteGroup
-	routers *router
-	groups  []*RouteGroup
+	routers       *router
+	groups        []*RouteGroup
+	htmlTemplates *template.Template
+	funcMap       template.FuncMap
 }
 
 type RouteGroup struct {
@@ -25,6 +30,11 @@ func New() *Engine {
 	engine.RouteGroup = &RouteGroup{engine: engine}
 	engine.groups = []*RouteGroup{engine.RouteGroup}
 	return engine
+}
+
+func (group *RouteGroup) Use(handles ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, handles...)
+
 }
 
 func (g *RouteGroup) Group(prefix string) *RouteGroup {
@@ -52,6 +62,29 @@ func (group *RouteGroup) POST(path string, handler HandlerFunc) {
 	group.addRoute("POST", path, handler)
 }
 
+func (group *RouteGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := path.Join(group.prefix, relativePath)
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(c *Context) {
+		file := c.Param("filepath")
+		// Check if file exists and/or if we have permission to access it
+		if _, err := fs.Open(file); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+
+		fileServer.ServeHTTP(c.Writer, c.Req)
+	}
+}
+
+func (engine *Engine) SetFuncMap(funcMap template.FuncMap) {
+	engine.funcMap = funcMap
+}
+
+func (engine *Engine) LoadHTMLGlob(pattern string) {
+	engine.htmlTemplates = template.Must(template.New("").Funcs(engine.funcMap).ParseGlob(pattern))
+}
+
 func (e *Engine) addRouter(method, path string, handler HandlerFunc) {
 	e.routers.addRoute(method, path, handler)
 }
@@ -69,7 +102,15 @@ func (e *Engine) Run(addr string) (err error) {
 }
 
 func (e *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	for _, group := range e.groups {
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
 	c := newContext(w, req)
+	c.handlers = middlewares
 	e.routers.handler(c)
-
+	c.engine = e
+	e.routers.handler(c)
 }
